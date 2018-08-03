@@ -27,7 +27,6 @@ class ContBatchNorm3d(nn.modules.batchnorm._BatchNorm):
             input, self.running_mean, self.running_var, self.weight, self.bias,
             True, self.momentum, self.eps)
 
-
 class LUConv(nn.Module):
     def __init__(self, nchan, elu):
         super(LUConv, self).__init__()
@@ -83,7 +82,6 @@ class DownTransition(nn.Module):
         out = self.ops(out)
         out = self.relu2(torch.add(out, down))
         return out
-
 
 class UpTransition(nn.Module):
     def __init__(self, inChans, outChans, nConvs, elu, dropout=False):
@@ -166,6 +164,7 @@ class VNet(nn.Module):
     #     self.up_tr64 = UpTransition(64, 2)
     #     self.up_tr32 = UpTransition(32, 1)
     #     self.out_tr = OutputTransition(16)
+    
     def forward(self, x):
         out16 = self.in_tr(x)
         out32 = self.down_tr32(out16)

@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+"""  """#!/usr/bin/env python3
 
-from local import *
+# from local import *
 import time
 import argparse
 import torch
 
 import numpy as np
+
 import torch.nn as nn
 import torch.nn.init as init
 import torch.optim as optim
@@ -17,16 +18,16 @@ import torchvision.transforms as transforms
 
 from torch.utils.data import DataLoader
 
-import torchbiomed.datasets as dset
-import torchbiomed.transforms as biotransforms
-import torchbiomed.loss as bioloss
-import torchbiomed.utils as utils
+import sys
+from torchpmc import loss as bioloss
+from torchpmc import utils
+from torchpmc import datasets as dset
 
 import os
 import sys
-import math
+import math # change math imports to numpy
 
-import shutil
+import shutil 
 
 import setproctitle
 
@@ -34,20 +35,10 @@ import vnet
 import make_graph
 from functools import reduce
 import operator
-
-
-#nodule_masks = "normalized_mask_5_0"
-#lung_masks = "normalized_seg_lungs_5_0"
-#ct_images = "normalized_CT_5_0"
-#target_split = [1, 1, 1]
-#ct_targets = nodule_masks
-
-
-nodule_masks = "normalized_brightened_CT_2_5"
-lung_masks = "inferred_seg_lungs_2_5"
-ct_images = "luna16_ct_normalized"
-ct_targets = nodule_masks
-target_split = [2, 2, 2]
+ 
+# root_dir = "/home/mia/Desktop/GoogleDrive/Images/PMCLabels"
+root_dir = "/home/mia/Desktop/Images/PMCLabels"
+target_split = []
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -90,7 +81,7 @@ def inference(args, loader, model, transforms):
         # merge subvolumes and save
         results = output.chunk(nvols)
         results = map(lambda var : torch.squeeze(var.data).numpy().astype(np.int16), results)
-        volume = utils.merge_image([*results], target_split)
+        volume = utils.merge_image([results], target_split)
         print("save {}".format(series))
         utils.save_updated_image(volume, os.path.join(dst, series + ".mhd"), origin, spacing)
 
@@ -102,12 +93,12 @@ def noop(x):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batchSz', type=int, default=10)
+    parser.add_argument('--batchSz', type=int, default=1)
     parser.add_argument('--dice', action='store_true')
     parser.add_argument('--ngpu', type=int, default=1)
     parser.add_argument('--nEpochs', type=int, default=300)
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                        help='manual epoch number (useful on restarts)')
+                        help='  manual epoch number (useful on restarts)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -143,7 +134,6 @@ def main():
     batch_size = args.ngpu*args.batchSz
     gpu_ids = range(args.ngpu)
     model = nn.parallel.DataParallel(model, device_ids=gpu_ids)
-
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
@@ -176,25 +166,8 @@ def main():
         shutil.rmtree(args.save)
     os.makedirs(args.save, exist_ok=True)
 
-    # LUNA16 dataset isotropically scaled to 2.5mm^3
-    # and then truncated or zero-padded to 160x128x160
-    normMu = [-642.794]
-    normSigma = [459.512]
-    normTransform = transforms.Normalize(normMu, normSigma)
-
-    trainTransform = transforms.Compose([
-        transforms.ToTensor(),
-        normTransform
-    ])
-    testTransform = transforms.Compose([
-        transforms.ToTensor(),
-        normTransform
-    ])
-    if ct_targets == nodule_masks:
-        masks = lung_masks
-    else:
-        masks = None
-
+    masks = None
+    
     if args.inference != '':
         if not args.resume:
             print("args.resume must be set to do inference")
@@ -205,27 +178,33 @@ def main():
         inference_batch_size = args.ngpu
         root = os.path.dirname(src)
         images = os.path.basename(src)
-        dataset = dset.LUNA16(root=root, images=images, transform=testTransform, split=target_split, mode="infer")
-        loader = DataLoader(dataset, batch_size=inference_batch_size, shuffle=False, collate_fn=noop, **kwargs)
-        inference(args, loader, model, trainTransform)
+        dataset = dset.PMC_Dataset(root=root, images=root, transform=testTransform, 
+                                    split=target_split, mode="infer")
+        loader = DataLoader(dataset, batch_size=inference_batch_size, 
+                            shuffle=False, collate_fn=noop, **kwargs)
+        inference(args, loader, model)
+
+        # inference(args, loader, model, trainTransform)
+
         return
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     print("loading training set")
-    trainSet = dset.LUNA16(root='luna16', images=ct_images, targets=ct_targets,
-                           mode="train", transform=trainTransform, 
-                           class_balance=class_balance, split=target_split, seed=args.seed, masks=masks)
+    trainSet = dset.PMC_Dataset(root=root_dir, images=root_dir, targets=root_dir,
+                                 mode="train", class_balance= None, split= None, test_fraction=0.25)
+
     trainLoader = DataLoader(trainSet, batch_size=batch_size, shuffle=True, **kwargs)
+    
     print("loading test set")
-    testLoader = DataLoader(
-        dset.LUNA16(root='luna16', images=ct_images, targets=ct_targets,
-                    mode="test", transform=testTransform, seed=args.seed, masks=masks, split=target_split),
-        batch_size=batch_size, shuffle=False, **kwargs)
+    
+    testSet = dset.PMC_Dataset(root=root_dir, images=root_dir, targets=root_dir,
+                            mode="test", split=target_split)
+    testLoader = DataLoader(testSet, batch_size=batch_size, shuffle=False, **kwargs)
 
     target_mean = trainSet.target_mean()
     bg_weight = target_mean / (1. + target_mean)
     fg_weight = 1. - bg_weight
-    print(bg_weight)
+    print("bg_weight:",bg_weight)
     class_weights = torch.FloatTensor([bg_weight, fg_weight])
     if args.cuda:
         class_weights = class_weights.cuda()
@@ -242,6 +221,7 @@ def main():
     testF = open(os.path.join(args.save, 'test.csv'), 'w')
     err_best = 100.
     for epoch in range(1, args.nEpochs + 1):
+        print(args)
         adjust_opt(args.opt, optimizer, epoch)
         train(args, epoch, model, trainLoader, optimizer, trainF, class_weights)
         err = test(args, epoch, model, testLoader, optimizer, testF, class_weights)
@@ -268,6 +248,8 @@ def train_nll(args, epoch, model, trainLoader, optimizer, trainF, weights):
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
+
+        # forward
         output = model(data)
         target = target.view(target.numel())
         loss = F.nll_loss(output, target, weight=weights)
@@ -379,6 +361,157 @@ def adjust_opt(optAlg, optimizer, epoch):
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
+
+## Transform need to changed to be given stack wide and not image specific ##
+# Cropping x3 
+class RandomCrop(object):
+    """
+        Crop randomly the image in a sample.
+    Args:
+        output_size (tuple or int): Desired output size. If int, square crop
+            is made.
+    """
+
+    def __init__(self, output_size):
+        assert isinstance(output_size, (int, tuple))
+        if isinstance(output_size, int):
+            self.output_size = (output_size, output_size)
+        else:
+            assert len(output_size) == 2
+            self.output_size = output_size
+
+    def __call__(self, sample):
+        image, landmarks = sample['image'], sample['landmarks']
+
+        h, w = image.shape[:2]
+        new_h, new_w = self.output_size
+
+        top = np.random.randint(0, h - new_h)
+        left = np.random.randint(0, w - new_w)
+
+        image = image[top: top + new_h,
+                      left: left + new_w]
+
+        landmarks = landmarks - [left, top]
+
+        return {'image': image, 'landmarks': landmarks}
+
+
+class RandomRotation(object):
+    """
+    Rotation (More to come....maybe)
+    """
+
+    def __init__(self, degrees, resample=False, expand=False, center=None):
+        if isinstance(degrees, numbers.Number):
+            if degrees < 0:
+                raise ValueError("If degrees is a single number, it must be positive.")
+            self.degrees = (-degrees, degrees)
+        else:
+            if len(degrees) != 2:
+                raise ValueError("If degrees is a sequence, it must be of len 2.")
+            self.degrees = degrees
+
+        self.resample = resample
+        self.expand = expand
+        self.center = center
+
+    
+    def __call__(self, img):
+        """
+            The landmarks need to be rotated with the image so if (x,y) is a 
+            point in the image the corresponding rotated point 
+            will be (x', y') where:
+                x' = x*cos(degrees) - y*sin(degrees)
+                y' = y*cos(degrees) + x*sin(degrees)
+
+
+                math.sin(x) - returns the sine of x radians
+                math.cos(x) - returns the cosine of x radians 
+                math.radians(x) - converts degrees to radians 
+        """
+
+        image, landmarks = sample['image'], sample['landmarks']
+
+        angle = self.degrees
+        rads = math.radians(angle)
+
+        rotMatrix = [[np.cos(rads),-1*np.sin(rads)],[np.sin(rads), np.cos(rads)]]
+        
+        for i in range(0,len(landmarks)):
+            x = landmarks[i][0]
+            y = landmarks[i][1]
+            merp = [[x],[y]]
+
+            new_points = np.matmul(rotMatrix,merp)
+
+            new_x = new_points[0]
+            new_y = new_points[1]
+
+            landmarks[i][0] = new_x
+            landmarks[i][1] = new_y
+
+        return {'image': image, 'landmarks': landmarks}
+
+class ToTensor(object):
+    """Convert ndarrays in sample to Tensors."""
+
+    def __call__(self, sample):
+        image, landmarks = sample['image'], sample['landmarks']
+
+        # swap color axis because
+        # numpy image: H x W x C
+        # torch image: C X H X W
+        image = image.transpose((2, 0, 1))
+        return {'image': torch.from_numpy(image),
+                'landmarks': torch.from_numpy(landmarks)}
+
+def hist_match(source, template):
+    """
+    Adjust the pixel values of a grayscale image such that its histogram
+    matches that of a target image
+
+    Arguments:
+    -----------
+        source: np.ndarray
+            Image to transform; the histogram is computed over the flattened
+            array
+        template: np.ndarray
+            Template image; can have different dimensions to source
+    Returns:
+    -----------
+        matched: np.ndarray
+            The transformed output image
+
+    From:
+    --------
+    https://stackoverflow.com/questions/32655686/histogram-matching-of-two-images-in-python-2-x
+    """
+
+    oldshape = source.shape
+    source = source.ravel()
+    template = template.ravel()
+
+    # get the set of unique pixel values and their corresponding indices and
+    # counts
+    s_values, bin_idx, s_counts = np.unique(source, return_inverse=True,
+                                            return_counts=True)
+    t_values, t_counts = np.unique(template, return_counts=True)
+
+    # take the cumsum of the counts and normalize by the number of pixels to
+    # get the empirical cumulative distribution functions for the source and
+    # template images (maps pixel value --> quantile)
+    s_quantiles = np.cumsum(s_counts).astype(np.float64)
+    s_quantiles /= s_quantiles[-1]
+    t_quantiles = np.cumsum(t_counts).astype(np.float64)
+    t_quantiles /= t_quantiles[-1]
+
+    # interpolate linearly to find the pixel values in the template image
+    # that correspond most closely to the quantiles in the source image
+    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
+
+    return interp_t_values[bin_idx].reshape(oldshape)
+
 
 if __name__ == '__main__':
     main()
