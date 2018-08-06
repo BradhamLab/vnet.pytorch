@@ -8,7 +8,6 @@ from torchpmc import utils
 import glob
 import os
 import os.path
-import SimpleITK as sitk
 import pandas as pd
 from skimage.draw import polygon
 from PIL import Image
@@ -61,8 +60,8 @@ def load_image(root, series):
 
     for each in image_file_list:
         img_file = each
-        itk_img = sitk.ReadImage(img_file)
-        img_array = sitk.GetArrayFromImage(itk_img)
+        itk_img = Image.open(img_file)
+        img_array = np.asarray(itk_img)
         img.append(img_array)
 
     z, y, x = np.shape(img)
@@ -81,8 +80,8 @@ def load_label(root, series):
     for each in image_file_list:
         base = os.path.splitext(each)[0]
         img_file = each
-        itk_img = sitk.ReadImage(img_file)
-        img_array = sitk.GetArrayFromImage(itk_img)
+        itk_img = Image.open(img_file)
+        img_array = np.asarray(itk_img)
         
         y, x = np.shape(img_array)
         img_bin = np.zeros((y, x))

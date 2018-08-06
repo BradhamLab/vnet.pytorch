@@ -20,7 +20,6 @@ from torch.utils.data import DataLoader
 
 import sys
 from torchpmc import loss as bioloss
-from torchpmc import utils
 from torchpmc import datasets as dset
 
 import os
@@ -84,9 +83,8 @@ def inference(args, loader, model, transforms):
         # merge subvolumes and save
         results = output.chunk(nvols)
         results = map(lambda var : torch.squeeze(var.data).numpy().astype(np.int16), results)
-        volume = utils.merge_image([results], target_split)
+        
         print("save {}".format(series))
-        utils.save_updated_image(volume, os.path.join(dst, series + ".mhd"), origin, spacing)
 
 # performing post-train inference:
 # train.py --resume <model checkpoint> --i <input directory (*.mhd)> --save <output directory>
