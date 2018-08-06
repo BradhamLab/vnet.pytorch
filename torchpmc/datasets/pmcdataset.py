@@ -279,6 +279,8 @@ class PMC_Dataset(data.Dataset):
         if self.co_transform is not None:
             img, target = self.co_transform(img, target)
 
+        img = torch.from_numpy(img)
+        
         return img, target
 
     def __len__(self):
