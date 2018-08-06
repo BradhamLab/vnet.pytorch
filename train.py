@@ -96,7 +96,7 @@ def main():
     parser.add_argument('--batchSz', type=int, default=1)
     parser.add_argument('--dice', action='store_true')
     parser.add_argument('--ngpu', type=int, default=1)
-    parser.add_argument('--nEpochs', type=int, default=300)
+    parser.add_argument('--nEpochs', type=int, default=1)
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='  manual epoch number (useful on restarts)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -117,7 +117,7 @@ def main():
                         choices=('sgd', 'adam', 'rmsprop'))
     args = parser.parse_args()
     best_prec1 = 100.
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    args.cuda = False
     args.save = args.save or 'work/vnet.base.{}'.format(datestr())
     nll = True
     if args.dice:
@@ -133,7 +133,7 @@ def main():
     model = vnet.VNet(elu=False, nll=nll)
     batch_size = args.ngpu*args.batchSz
     gpu_ids = range(args.ngpu)
-    model = nn.parallel.DataParallel(model, device_ids=gpu_ids)
+    
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
@@ -302,6 +302,7 @@ def test_nll(args, epoch, model, testLoader, optimizer, testF, weights):
 def train_dice(args, epoch, model, trainLoader, optimizer, trainF, weights):
     model.train()
     nProcessed = 0
+    print(nProcessed)
     nTrain = len(trainLoader.dataset)
     for batch_idx, (data, target) in enumerate(trainLoader):
         if args.cuda:
