@@ -37,7 +37,10 @@ from functools import reduce
 import operator
  
 # root_dir = "/home/mia/Desktop/GoogleDrive/Images/PMCLabels"
-root_dir = "/home/mia/Desktop/Images/PMCLabels"
+dirname = os.getcwd()
+print("dirname:" ,dirname)
+root_dir = os.path.join(dirname, "data")
+print(root_dir)
 target_split = []
 
 def weights_init(m):
