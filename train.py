@@ -24,7 +24,7 @@ from torchpmc import datasets as dset
 
 import os
 import sys
-import math # change math imports to numpy
+# import math # change math imports to numpy
 
 import shutil 
 
@@ -118,7 +118,7 @@ def main():
                         choices=('sgd', 'adam', 'rmsprop'))
     args = parser.parse_args()
     best_prec1 = 100.
-    args.cuda = False
+    args.cuda = True
     args.save = args.save or 'work/vnet.base.{}'.format(datestr())
     nll = True
     if args.dice:
@@ -200,7 +200,7 @@ def main():
     
     testSet = dset.PMC_Dataset(root=root_dir, images=root_dir, targets=root_dir,
                             mode="test", split=target_split)
-    testLoader = DataLoader(testSet, batch_size=batch_size, shuffle=False, **kwargs)
+    testLoader = DataLoader(testSet,batch_size=batch_size, shuffle=False, **kwargs)
 
     target_mean = trainSet.target_mean()
     bg_weight = target_mean / (1. + target_mean)
