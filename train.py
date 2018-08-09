@@ -118,7 +118,7 @@ def main():
                         choices=('sgd', 'adam', 'rmsprop'))
     args = parser.parse_args()
     best_prec1 = 100.
-    args.cuda = True
+    args.cuda = False
     args.save = args.save or 'work/vnet.base.{}'.format(datestr())
     nll = True
     if args.dice:
