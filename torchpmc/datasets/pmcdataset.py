@@ -1,3 +1,5 @@
+
+
 import numpy as np
 
 import torch
@@ -50,44 +52,68 @@ def train_test_split(full, positive, test_fraction):
 
 
 def load_image(root, series):
+    image_directory = series
+    image_file_list = glob.glob(image_directory + "/*png")
+    image_file_list.sort()
+
+    num_of_slices = len(image_file_list)
     
-    img = series + ".png"
-    img = io.imread(img)
+    img = []
+
+    for each in image_file_list:
+        img_array = each
+        img_array = io.imread(img_array)
+        img_array = np.array(img_array)
+        img_array = color.gray2rgb(img_array)
+        print(np.shape(img_array))
+        img.append(img_array)
+
+    # print(np.shape(img))
+    z, y, x, channel = np.shape(img)
     img = np.array(img)
-    img = color.gray2rgb(img)
-    print(np.shape(img))
+    # img = img.reshape((1, z, y, x))
     
-    y, x, z = np.shape(img)
-    img = img.reshape((1, z, y, x))
+    print("Final Shape:", np.shape(img))
     return img
 
 def load_label(root, series):
-    
-    img_file = series + ".png"
-    json_file = series + ".json"
-    
-    im = sitk.ReadImage(img_file)
-    im_array = sitk.GetArrayFromImage(im)
-    columns = len(im_array)
-    rows = len(im_array[1])
+    image_directory = series
+    image_file_list = glob.glob(image_directory + "/*png")
+    image_file_list.sort()
 
-    img = np.zeros((rows, columns))
-    labels_n_points = obtainpoints(json_file) 
-    
-    for label in labels_n_points:
-        points = labels_n_points[label]
+    img = []
+
+    for each in image_file_list:
+        base = os.path.splitext(each)[0]
+        img_file = each
+        itk_img = sitk.ReadImage(img_file)
+        img_array = sitk.GetArrayFromImage(itk_img)
         
-        r = []
-        c = []
+        y, x = np.shape(img_array)
+        img_bin = np.zeros((y, x))
 
-        for i in range(0,len(points)):
-            r.append(points[i][0])
-            c.append(points[i][1])       
+        json_file = base +".json"
+        if (os.path.exists(json_file) == True):
+            labels_n_points = obtainpoints(json_file) 
+    
+            for label in labels_n_points:
+                points = labels_n_points[label]
+            
+                r = []
+                c = []
 
-        rr, cc = polygon(r, c)
+                for i in range(0,len(points)):
+                    r.append(points[i][0])
+                    c.append(points[i][1])       
 
-        img[rr, cc] == 1
-        
+                rr, cc = polygon(r, c)
+
+                img_bin[rr, cc] == 1
+
+        img.append(img_bin)
+    else:
+        img.append(img_bin)
+    img = np.array(img)
     return img
 
 def obtainpoints(json_file):
@@ -108,22 +134,15 @@ def obtainpoints(json_file):
 
 def full_dataset(root_dir, images):
     image_list = []
-    image_files = []
 
     for (root,dirs,files) in os.walk(root_dir):
-            root_embroyo = root
-            files_embroyo = files
-            
-            for i in range(0,len(files_embroyo)):
-                if(files_embroyo[i] == 'metadata.json'):
-                    embroyo_metadata = os.path.join(root_embroyo,files_embroyo[i])
-                    channel = obtainchannel(embroyo_metadata)
-                    image_directory = os.path.join(root_embroyo, channel) + "/IntensityImages"                  
-                    image_file_list = glob.glob(image_directory + "/*png")
 
-                    for img in image_file_list:
-                        base = os.path.splitext(img)[0]
-                        image_list.append(base)
+        for i in range(0,len(files)):
+            if(files[i] == 'metadata.json'):
+                embroyo_metadata = os.path.join(root,files[i])
+                channel = obtainchannel(embroyo_metadata)
+                image_directory = os.path.join(root, channel) + "/IntensityImages"                  
+                image_list.append(image_directory)
     
     return image_list
 
@@ -136,42 +155,22 @@ def make_dataset(root_dir, images, targets, seed, train, class_balance, partitio
     label_list = []
 
     for (root,dirs,files) in os.walk(root_dir):
-        
+
         for i in range(0,len(files)):
             if(files[i] == 'metadata.json'):
                 embroyo_metadata = os.path.join(root,files[i])
                 channel = obtainchannel(embroyo_metadata)
                 image_directory = os.path.join(root, channel) + "/IntensityImages"                  
-                json_file_list = glob.glob(image_directory + "/*json")
+                label_list.append(image_directory)
 
-                for anno in json_file_list:
-                    base = os.path.splitext(anno)[0]
-                    label_list.append(base)
-
+    print(len(label_list))
     zero = label_list[1]
     sample_label = load_label(root_dir, zero)
     shape = np.shape(sample_label)
     
     if len(test_split) == 0:
         zero_tensor = np.zeros(shape, dtype=np.uint8)
-        image_list = []
-        
-        file_list=[]
-
-        for (root,dirs,files) in os.walk(root_dir):
-            root_embroyo = root
-            files_embroyo = files
-            
-            for i in range(0,len(files_embroyo)):
-                if(files_embroyo[i] == 'metadata.json'):
-                    embroyo_metadata = os.path.join(root_embroyo,files_embroyo[i])
-                    channel = obtainchannel(embroyo_metadata)
-                    image_directory = os.path.join(root_embroyo, channel) + "/IntensityImages"                  
-                    image_file_list = glob.glob(image_directory + "/*png")
-
-                    for img in image_file_list:
-                        base = os.path.splitext(img)[0]
-                        file_list.append(base)               
+        image_list = []             
 
         image_list = label_list
 
@@ -181,14 +180,11 @@ def make_dataset(root_dir, images, targets, seed, train, class_balance, partitio
         train_split, test_split = train_test_split(full, positives, test_fraction)
     
     if train:
-        print(len(label_list))
-        print(len(train_split))
         keys = train_split
     else:
-        print(len(test_split))
         keys = test_split
     
-    y, x = shape
+    z, y, x = shape
 
     result = []
     target_means = []
@@ -279,8 +275,7 @@ class PMC_Dataset(data.Dataset):
         target = load_label(self.root, series)
         target = torch.from_numpy(target.astype(np.int64))
         image = load_image(self.images, series)        
-        img = image.astype(np.float32)       
-        
+        img = image.astype(np.float32)
 
         if self.transform is not None:
             img = self.transform(image)
@@ -290,6 +285,7 @@ class PMC_Dataset(data.Dataset):
             img, target = self.co_transform(img, target)
 
         img = torch.from_numpy(img)
+        
         return img, target
 
     def __len__(self):
