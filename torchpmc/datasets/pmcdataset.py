@@ -69,7 +69,7 @@ def load_image(root, series):
         img.append(img_array)
 
     # print(np.shape(img))
-    y, x, channel = np.shape(img)
+    z, y, x = np.shape(img)
     img = np.array(img)
     img = img.reshape((1, z, y, x))
     
