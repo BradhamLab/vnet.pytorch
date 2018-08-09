@@ -64,7 +64,7 @@ def load_image(root, series):
         img_array = each
         img_array = io.imread(img_array)
         img_array = np.array(img_array)
-        img_array = color.gray2rgb(img_array)
+        # img_array = color.gray2rgb(img_array)
         print(np.shape(img_array))
         img.append(img_array)
 
